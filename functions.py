@@ -19,11 +19,10 @@ def read_from_excel(object, obs_code = 995):
         pandas dataframe: Dataframe containing Excel data.
     """
     #reading data from excel file
-    df = pd.read_excel(f'{object} Data.xlsx')
-    #print(df)
+    df = pd.read_excel(f'Data/{object} Data.xlsx')
 
     #creating (or overwriting) new file with a relevant name.
-    f = open(f"{object}_data.txt", "w")
+    f = open(f"Data/{object}_data.txt", "w")
     f.writelines(['123456789|123456789|123456789|123456789|123456789|123456789|123456789|123456789|\n', '<-ObjDesig->*nnYYYY MM DD.DDDDD HH MM SS.SSSsdd mm ss.ss<blanks >MM.MMBz<ref>COD\n'])
 
     #lots of string slicing to take data from the excel spreadsheet and write it to the txt file line by line in the correct format.
@@ -74,6 +73,7 @@ def read_from_excel(object, obs_code = 995):
     #closes and saves file.
     f.close()
 
+    #returns pandas dataframe used to store data extracted from Excel file.
     return df
 
 def dec_to_dms(decimal):
