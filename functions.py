@@ -196,15 +196,18 @@ def read_fo_elements(elements_filename):
     f = open(f'{elements_filename}')
     lines = f.readlines()
     f.close()
-    fo_peri_arg = str.split(lines[4])[5]
-    fo_sma = str.split(lines[5])[1]
-    fo_asc_node = str.split(lines[5])[5]
-    fo_eccentricity = str.split(lines[6])[1]
-    fo_inc = str.split(lines[6])[5]
-    fo_period = str.split(lines[7])[1]
-    fo_peri_dist = str.split(lines[8])[1]
-    fo_apogee_dist = str.split(lines[8])[5]
-    return fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist
+    try:
+        fo_peri_arg = str.split(lines[4])[5]
+        fo_sma = str.split(lines[5])[1]
+        fo_asc_node = str.split(lines[5])[5]
+        fo_eccentricity = str.split(lines[6])[1]
+        fo_inc = str.split(lines[6])[5]
+        fo_period = str.split(lines[7])[1]
+        fo_peri_dist = str.split(lines[8])[1]
+        fo_apogee_dist = str.split(lines[8])[5]
+        return fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist
+    except:
+        return "find_orb could not determine an appropriate orbit"
 
 def get_jpl_ephemeris(object_designation, obs_code, start_date, end_date, step):
     """Gets JPL ephemeris for a given object and range of dates.
@@ -280,3 +283,29 @@ def read_jpl_ephemeris(eph, object_designation, obs_code, rows_to_read = 0):
 
     #closes and saves file.
     f.close()
+
+def jackknife(object, no_of_observations_to_remove = 5):
+    elements = []
+    rows = []
+    os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
+    with open(f'Data/{object}_data.txt') as file:
+        for line in file:
+            rows.append(line)
+    no_of_observations = len(rows)
+    for i in range(no_of_observations-no_of_observations_to_remove, no_of_observations):
+        os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
+        print(rows[0:i])
+        with open('temp_data.txt', 'w') as file:
+            file.writelines(rows[0:i])
+        functions.run_find_orb(f'temp_data.txt')
+        fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist = functions.read_fo_elements('elements.txt')
+        fo_elements = np.array([fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist], dtype=np.float64)
+        if i == no_of_observations-1:
+            best_fit_elements = fo_elements
+        elements.append(fo_elements)
+    print(elements)
+    print(best_fit_elements)
+    errors = np.std(elements, axis=0)
+    print(errors)
+
+    return best_fit_elements, errors
