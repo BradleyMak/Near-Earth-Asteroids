@@ -7,6 +7,9 @@ import functions
 import subprocess
 import os
 import time
+from ephem import *
+import math, sys
+import datetime
 
 def read_from_excel(object, obs_code = 995):
     """Reads astrometric data from Excel file with the name '{Object} Data' and saves it as a txt file with the correct format for find_orb.
@@ -63,7 +66,7 @@ def read_from_excel(object, obs_code = 995):
 
         #if Excel file contains column for observatory code, read the observatory code...
         try:
-            obs_code = df['Observatory'][i]
+            obs_code = int(df['Observatory'][i])
         #... if not, default to using the observatory code given as an argument to the function.
         except:
             obs_code = obs_code    
@@ -197,15 +200,17 @@ def read_fo_elements(elements_filename):
     lines = f.readlines()
     f.close()
     try:
+        epoch = f'{str.split(lines[2])[1]} {month_to_number(str.split(lines[2])[2])} {str.split(lines[2])[3][:2]}'
+        mean_anomaly = str.split(lines[3])[1]
         fo_peri_arg = str.split(lines[4])[5]
         fo_sma = str.split(lines[5])[1]
         fo_asc_node = str.split(lines[5])[5]
         fo_eccentricity = str.split(lines[6])[1]
         fo_inc = str.split(lines[6])[5]
-        fo_period = str.split(lines[7])[1]
+        fo_period = str.split(lines[7])[1].split('/')[0]
         fo_peri_dist = str.split(lines[8])[1]
         fo_apogee_dist = str.split(lines[8])[5]
-        return fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist
+        return fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist, epoch, mean_anomaly
     except:
         return "find_orb could not determine an appropriate orbit"
 
@@ -285,6 +290,16 @@ def read_jpl_ephemeris(eph, object_designation, obs_code, rows_to_read = 0):
     f.close()
 
 def jackknife(object, no_of_observations_to_remove = 5):
+    """Carries out jackknifing process to determine the errors on the orbital elements returned by find_orb.
+
+    Args:
+        object (string): Object name/designation.
+        no_of_observations_to_remove (int, optional): Number of observations to remove during the jackknifing process. Defaults to 5.
+
+    Returns:
+        list: best fit orbital elements.
+        list: errors on the best fit orbital elements determined via the jackknifing process.
+    """
     elements = []
     rows = []
     os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
@@ -292,11 +307,14 @@ def jackknife(object, no_of_observations_to_remove = 5):
         for line in file:
             rows.append(line)
     no_of_observations = len(rows)
-    for i in range(no_of_observations-no_of_observations_to_remove, no_of_observations):
+    print(rows)
+
+    for i in range(2, no_of_observations):
         os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
-        print(rows[0:i])
+        temp = rows[0:i] + rows[i+1:len(rows)]
+        print(temp)
         with open('temp_data.txt', 'w') as file:
-            file.writelines(rows[0:i])
+            file.writelines(temp)
         functions.run_find_orb(f'temp_data.txt')
         fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist = functions.read_fo_elements('elements.txt')
         fo_elements = np.array([fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist], dtype=np.float64)
@@ -309,3 +327,132 @@ def jackknife(object, no_of_observations_to_remove = 5):
     print(errors)
 
     return best_fit_elements, errors
+
+def write_orbital_parameters(object, epoch, mean_anomaly, peri_arg, sma, asc_node, eccentricity, inc):
+    os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
+    """Function to write orbital parameters into a file called 'orbital_parameters' in the correct format to be passed into the find_xyz algorithm.
+
+    Args:
+        object (string): _description_
+        epoch (_type_): _description_
+        mean_anomaly (_type_): _description_
+        peri_arg (_type_): _description_
+        sma (_type_): _description_
+        asc_node (_type_): _description_
+        eccentricity (_type_): _description_
+        inc (_type_): _description_
+    """
+    f = open('orbital_elements', 'w')
+    f.writelines([f'. Object: {object}\n', 
+                 f'. Mean anomaly: {mean_anomaly}\n',
+                 f'. Argument of perihelion: {peri_arg}\n',
+                 f'. Long. of ascending node: {asc_node}\n',
+                 f'. Inclination: {inc}\n',
+                 f'. Eccentricity: {eccentricity}\n',
+                 f'. Semimajor axis: {sma}\n',
+                 f'. Epoch of osculation: {epoch}\n'])
+    f.close()
+
+
+
+def find_xyz(start_date, no_of_days):
+    """"""
+    # date format required    2019-02-19T18:00:00
+
+    """start_date = sys.argv[1]
+    no_of_days = int(sys.argv[2])"""
+
+    year = start_date[0:4]
+    month = start_date[5:7]
+    day = start_date[8:10]
+    time = start_date[11:]
+    start_date = datetime.datetime(int(year),int(month), int(day), int(time[0:2]), int(time[3:5])*60 + int(time[6:]))
+
+    dates = []
+    suns = []
+    minors = []
+    diffs = []
+
+    elements = open('orbital_elements')
+    minor = EllipticalBody()
+    minor._epoch = '2000/01/01.5'   # epoch date for J2000.0
+    while 1:
+        line = elements.readline()
+        if line == "": break
+        word = line.split()
+        if line.find('Object:') >= 0: obj_name = ' '.join(word[2:])
+        if line.find('Mean anomaly') >= 0: minor._M = float(word[3])
+        if line.find('Argument of perihelion') >= 0: minor._om = float(word[4])
+        if line.find('Long. of ascending node') >= 0: minor._Om = float(word[5])
+        if line.find('Inclination') >= 0: minor._inc = float(word[2])
+        if line.find('Eccentricity') >= 0: minor._e = float(word[2])
+        if line.find('Semimajor axis') >= 0: minor._a = float(word[3])
+        if line.find('Epoch of osculation') >= 0:
+            minor._epoch_M = word[4]+'/'+word[5]+'/'+word[6]
+        if line.find('Absolute magnitude') >= 0: minor._H = float(word[4])
+        if line.find('Slope parameter') >= 0: minor._G = float(word[4])   
+
+    durham = Observer()
+    durham.epoch = '2000'
+    durham.long = '-1:34:24'
+    durham.lat = '54:46:01'
+    durham.temp = 10
+    durham.elev = 119.5
+
+    for i in range(0, no_of_days):
+        durham.date =start_date + datetime.timedelta(days=i) # year+'/'+month+'/'+day+ ' '+obstime
+
+        dates.append(durham.date)
+
+        const = 180./math.pi
+        minor.compute(durham)
+        pos = Equatorial(minor.a_ra,minor.a_dec, epoch='2000')
+        ecl = Ecliptic(pos)
+        ecl_long = float(ecl.lon)
+        ecl_lat  = float(ecl.lat)
+
+        d_minor = minor.earth_distance
+        x_minor = d_minor*math.cos(ecl_lat)*math.cos(ecl_long)
+        y_minor = d_minor*math.cos(ecl_lat)*math.sin(ecl_long)
+        z_minor = d_minor*math.sin(ecl_lat)
+        print ("minor", x_minor, y_minor, z_minor)
+        print (" ")
+        minors.append([x_minor, y_minor, z_minor])
+
+        xxx = Sun()
+        xxx.compute(durham)
+        pos = Equatorial(xxx.a_ra,xxx.a_dec, epoch='2000')
+        ecl = Ecliptic(pos)
+        ecl_long = float(ecl.lon)
+        ecl_lat  = float(ecl.lat)
+        #print ecl_long*180./math.pi , ecl_lat*180./math.pi 
+        d_sun = xxx.earth_distance
+        x_sun = d_sun*math.cos(ecl_lat)*math.cos(ecl_long)
+        y_sun = d_sun*math.cos(ecl_lat)*math.sin(ecl_long)
+        z_sun = d_sun*math.sin(ecl_lat)
+        print ("Sun  ",x_sun, y_sun, z_sun)
+        print (" ")
+        print ("DIFF ",x_minor-x_sun, y_minor-y_sun, z_minor-z_sun)
+        print(" ")
+        suns.append([x_sun, y_sun, z_sun])
+        diffs.append([x_minor-x_sun, y_minor-y_sun, z_minor-z_sun])
+
+    #return dates, minors, suns, diffs
+        
+    earths = -1*np.array(suns)
+        
+    fig = plt.figure(constrained_layout = True)
+    ax = plt.axes(projection='3d')
+    ax.plot3D([i[0] for i in diffs], [i[1] for i in diffs], [i[2] for i in diffs], color = 'red', label = f'{obj_name}')
+    ax.plot3D([i[0] for i in earths], [i[1] for i in earths], [i[2] for i in earths], color = 'blue', label = 'Earth')
+    ax.plot3D([0], [0], [0], color = 'gold', label = 'Sun', marker = 'o', markersize = 12)
+    plt.legend()
+    ax.set_xlabel('x (AU)'); ax.set_ylabel('y (AU)'); ax.set_zlabel('z (AU)')
+    ax.set_xlim(-2, 2)
+    ax.set_ylim(-2, 2)
+    plt.savefig(f'plots/{obj_name}_orbit', bbox_inches='tight', pad_inches = 0.3)
+    plt.show()
+        
+    print(dates)
+
+    return dates, suns, earths, minors, diffs

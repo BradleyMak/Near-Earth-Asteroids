@@ -42,14 +42,14 @@ while 1:
     line = elements.readline()
     if line == "": break
     word = line.split()
-    if line.find('Object:') >= 0: obj_name = word[2]
+    if line.find('Object:') >= 0: obj_name = ' '.join(word[2:])
     if line.find('Mean anomaly') >= 0: minor._M = float(word[3])
     if line.find('Argument of perihelion') >= 0: minor._om = float(word[4])
     if line.find('Long. of ascending node') >= 0: minor._Om = float(word[5])
     if line.find('Inclination') >= 0: minor._inc = float(word[2])
     if line.find('Eccentricity') >= 0: minor._e = float(word[2])
     if line.find('Semimajor axis') >= 0: minor._a = float(word[3])
-    if line.find('Epoch of osculation  ') >= 0:
+    if line.find('Epoch of osculation') >= 0:
         minor._epoch_M = word[4]+'/'+word[5]+'/'+word[6]
     if line.find('Absolute magnitude') >= 0: minor._H = float(word[4])
     if line.find('Slope parameter') >= 0: minor._G = float(word[4])   
@@ -94,24 +94,25 @@ for i in range(0, no_of_days):
     z_sun = d_sun*math.sin(ecl_lat)
     print ("Sun  ",x_sun, y_sun, z_sun)
     print (" ")
-    print ("DIFF ",x_sun-x_minor, y_sun-y_minor, z_sun-z_minor)
+    print ("DIFF ",x_minor-x_sun, y_minor-y_sun, z_minor-z_sun)
     print(" ")
     suns.append([x_sun, y_sun, z_sun])
-    diffs.append([x_sun-x_minor, y_sun-y_minor, z_sun-z_minor])
+    diffs.append([x_minor-x_sun, y_minor-y_sun, z_minor-z_sun])
 
 #return dates, minors, suns, diffs
     
-earths = -np.array(suns)
+earths = -1*np.array(suns)
     
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 ax.plot3D([i[0] for i in diffs], [i[1] for i in diffs], [i[2] for i in diffs], color = 'red', label = f'{obj_name}')
 ax.plot3D([i[0] for i in earths], [i[1] for i in earths], [i[2] for i in earths], color = 'blue', label = 'Earth')
-ax.plot3D([0], [0], [0], color = 'gold', label = 'Sun', marker = 'o', markersize = 12)
+ax.plot3D([0], [0], [0], color = 'gold', label = 'Sun', marker = 'o', markersize = 12, linestyle = 'None')
 plt.legend()
 ax.set_xlabel('x (AU)'); ax.set_ylabel('y (AU)'); ax.set_zlabel('z (AU)')
 ax.set_xlim(-2, 2)
 ax.set_ylim(-2, 2)
+plt.savefig(f'plots/{obj_name}_orbit')
 plt.show()
     
 print(dates)
