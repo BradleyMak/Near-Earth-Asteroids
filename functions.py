@@ -43,6 +43,8 @@ def read_from_excel(object, obs_code = 995):
         if Date_and_Time == 'nan':
             continue
         month = Date_and_Time[5:7]; day = Date_and_Time[8:10]+'.'+str(np.round((float(Date_and_Time[11:13])*3600 + float(Date_and_Time[14:16])*60 + float(Date_and_Time[17:len(Date_and_Time)]))/(24*3600), 5))[2:7]
+        while len(day) != 8:
+            day += '0'
         Date_and_Time = f'{year} {month} {day}'
 
         RA = df['RA'][i]
@@ -202,14 +204,14 @@ def read_fo_elements(elements_filename):
     try:
         epoch = f'{str.split(lines[2])[1]} {month_to_number(str.split(lines[2])[2])} {str.split(lines[2])[3][:2]}'
         mean_anomaly = str.split(lines[3])[1]
-        fo_peri_arg = str.split(lines[4])[5]
-        fo_sma = str.split(lines[5])[1]
-        fo_asc_node = str.split(lines[5])[5]
-        fo_eccentricity = str.split(lines[6])[1]
-        fo_inc = str.split(lines[6])[5]
+        fo_peri_arg = str.split(lines[4])[str.split(lines[4]).index('Peri.')+1]
+        fo_sma = str.split(lines[5])[str.split(lines[5]).index('a')+1]
+        fo_asc_node = str.split(lines[5])[str.split(lines[5]).index('Node')+1]
+        fo_eccentricity = str.split(lines[6])[str.split(lines[6]).index('e')+1]
+        fo_inc = str.split(lines[6])[str.split(lines[6]).index('Incl.')+1]
         fo_period = str.split(lines[7])[1].split('/')[0]
-        fo_peri_dist = str.split(lines[8])[1]
-        fo_apogee_dist = str.split(lines[8])[5]
+        fo_peri_dist = (str.split(lines[8])+str.split(lines[7]))[(str.split(lines[8])+str.split(lines[7])).index('q')+1]
+        fo_apogee_dist = (str.split(lines[8])+str.split(lines[7]))[(str.split(lines[8])+str.split(lines[7])).index('Q')+1]
         return fo_peri_arg, fo_sma, fo_asc_node, fo_eccentricity, fo_inc, fo_period, fo_peri_dist, fo_apogee_dist, epoch, mean_anomaly
     except:
         return "find_orb could not determine an appropriate orbit"
@@ -289,7 +291,7 @@ def read_jpl_ephemeris(eph, object_designation, obs_code, rows_to_read = 0):
     #closes and saves file.
     f.close()
 
-def jackknife(object, no_of_observations_to_remove = 5):
+def jackknife(object):
     """Carries out jackknifing process to determine the errors on the orbital elements returned by find_orb.
 
     Args:
@@ -355,24 +357,32 @@ def write_orbital_parameters(object, epoch, mean_anomaly, peri_arg, sma, asc_nod
 
 
 
-def find_xyz(start_date, no_of_days):
-    """"""
+def find_xyz(start_date, no_of_points, separation = 1, plot = True):
+    """
+    """
     # date format required    2019-02-19T18:00:00
+    # separation in units of days.
 
     """start_date = sys.argv[1]
     no_of_days = int(sys.argv[2])"""
 
-    year = start_date[0:4]
-    month = start_date[5:7]
-    day = start_date[8:10]
-    time = start_date[11:]
-    start_date = datetime.datetime(int(year),int(month), int(day), int(time[0:2]), int(time[3:5])*60 + int(time[6:]))
+    try:
+        #if date is not already in datetime format
+        year = start_date[0:4]
+        month = start_date[5:7]
+        day = start_date[8:10]
+        time = start_date[11:]
+        start_date = datetime.datetime(int(year),int(month), int(day), int(time[0:2]), int(time[3:5])*60 + int(time[6:]))
+    except:
+        #if date is already in datetime format
+        start_date = start_date
 
     dates = []
     suns = []
     minors = []
     diffs = []
 
+    os.chdir('C:\\Users\\bradl\\.vscode\\advanced_lab')
     elements = open('orbital_elements')
     minor = EllipticalBody()
     minor._epoch = '2000/01/01.5'   # epoch date for J2000.0
@@ -399,10 +409,10 @@ def find_xyz(start_date, no_of_days):
     durham.temp = 10
     durham.elev = 119.5
 
-    for i in range(0, no_of_days):
-        durham.date =start_date + datetime.timedelta(days=i) # year+'/'+month+'/'+day+ ' '+obstime
+    for i in range(0, no_of_points):
+        durham.date = start_date + datetime.timedelta(days=i*separation) # year+'/'+month+'/'+day+ ' '+obstime
 
-        dates.append(durham.date)
+        dates.append(start_date + datetime.timedelta(days=i*separation))
 
         const = 180./math.pi
         minor.compute(durham)
@@ -415,8 +425,8 @@ def find_xyz(start_date, no_of_days):
         x_minor = d_minor*math.cos(ecl_lat)*math.cos(ecl_long)
         y_minor = d_minor*math.cos(ecl_lat)*math.sin(ecl_long)
         z_minor = d_minor*math.sin(ecl_lat)
-        print ("minor", x_minor, y_minor, z_minor)
-        print (" ")
+        #print ("minor", x_minor, y_minor, z_minor)
+        #print (" ")
         minors.append([x_minor, y_minor, z_minor])
 
         xxx = Sun()
@@ -430,29 +440,24 @@ def find_xyz(start_date, no_of_days):
         x_sun = d_sun*math.cos(ecl_lat)*math.cos(ecl_long)
         y_sun = d_sun*math.cos(ecl_lat)*math.sin(ecl_long)
         z_sun = d_sun*math.sin(ecl_lat)
-        print ("Sun  ",x_sun, y_sun, z_sun)
-        print (" ")
-        print ("DIFF ",x_minor-x_sun, y_minor-y_sun, z_minor-z_sun)
-        print(" ")
+        #print ("Sun  ",x_sun, y_sun, z_sun)
+        #print (" ")
+        #print ("DIFF ",x_minor-x_sun, y_minor-y_sun, z_minor-z_sun)
+        #print(" ")
         suns.append([x_sun, y_sun, z_sun])
         diffs.append([x_minor-x_sun, y_minor-y_sun, z_minor-z_sun])
-
-    #return dates, minors, suns, diffs
         
     earths = -1*np.array(suns)
         
-    fig = plt.figure(constrained_layout = True)
-    ax = plt.axes(projection='3d')
-    ax.plot3D([i[0] for i in diffs], [i[1] for i in diffs], [i[2] for i in diffs], color = 'red', label = f'{obj_name}')
-    ax.plot3D([i[0] for i in earths], [i[1] for i in earths], [i[2] for i in earths], color = 'blue', label = 'Earth')
-    ax.plot3D([0], [0], [0], color = 'gold', label = 'Sun', marker = 'o', markersize = 12)
-    plt.legend()
-    ax.set_xlabel('x (AU)'); ax.set_ylabel('y (AU)'); ax.set_zlabel('z (AU)')
-    ax.set_xlim(-2, 2)
-    ax.set_ylim(-2, 2)
-    plt.savefig(f'plots/{obj_name}_orbit', bbox_inches='tight', pad_inches = 0.3)
-    plt.show()
+    if plot == True:
+        fig = plt.figure(constrained_layout = True)
+        ax = plt.axes(projection='3d')
+        ax.plot3D([i[0] for i in diffs], [i[1] for i in diffs], [i[2] for i in diffs], color = 'red', label = f'{obj_name}')
+        ax.plot3D([i[0] for i in earths], [i[1] for i in earths], [i[2] for i in earths], color = 'blue', label = 'Earth')
+        ax.plot3D([0], [0], [0], color = 'gold', label = 'Sun', marker = 'o', markersize = 12)
+        plt.legend()
+        ax.set_xlabel('x (AU)'); ax.set_ylabel('y (AU)'); ax.set_zlabel('z (AU)')
+        plt.savefig(f'plots/{obj_name}_orbit', bbox_inches='tight', pad_inches = 0.3)
+        plt.show()
         
-    print(dates)
-
     return dates, suns, earths, minors, diffs
